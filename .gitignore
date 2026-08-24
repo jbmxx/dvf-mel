@@ -1,0 +1,16 @@
+# Raw DVF data — 2.6 GB, redistributed by DGFiP, not versioned
+data/raw/
+
+# DuckDB database — rebuilt from scripts
+*.duckdb
+*.duckdb.wal
+
+# Generated outputs
+output/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+__pycache__/
+*.pyc
