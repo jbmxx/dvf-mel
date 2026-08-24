@@ -17,6 +17,39 @@ Engine: DuckDB 1.5.5 — full 5-file scan in 2.4s, no import step
 Rows per mutation (2021, national): 2.69 — 63% of raw rows are repetitions of
 the same sale price across parcels and lots.
 
+## Scope definition — MEL perimeter
+
+The study area is the Métropole Européenne de Lille (95 communes, EPCI
+`200093201`). Rather than hardcoding 95 INSEE codes into every query, the
+list is pulled once from the official `geo.api.gouv.fr` endpoint and stored
+as a reference table:
+
+    CREATE OR REPLACE TABLE communes_mel AS
+    SELECT code AS code_insee, nom AS nom_commune
+    FROM read_json_auto(
+      'https://geo.api.gouv.fr/epcis/200093201/communes?fields=nom,code'
+    );
+
+Exported to `data/ref/communes_mel.csv` (versioned in the repo). Every
+downstream query filters by joining this table — the perimeter lives in the
+data, not in the code, and is reproducible from an authoritative source in
+one command.
+
+**Join key.** DVF stores `Code commune` unpadded (`9`, not `009`), so the
+INSEE code must be rebuilt as
+`"Code departement" || lpad("Code commune", 3, '0')`.
+Villeneuve-d'Ascq is `59009` — without the padding it becomes `599` and
+drops out of the join with no error raised.
+
+**Join validated on 2021:** all 95 MEL communes are present in the raw file,
+zero unmatched on either side.
+
+**Associated communes.** Lomme and Hellemmes-Lille hold their own INSEE codes
+but DVF reports them under Lille (`59350`) — a single row for the whole
+commune, 13,674 rows in 2021. No silent data loss, but Lille's median blends
+three distinct submarkets. Cannot be disaggregated from DVF alone; stated as
+a known limitation rather than worked around.
+
 ## Mutation-level filter cascade (MEL, 2021–2025)
 
 | # | Filter | Remaining | Dropped | % of initial |
@@ -117,39 +150,6 @@ hidden.
 **Order of magnitude going in:** 941,272 national mutations pass
 `Nature mutation = 'Vente'` + exactly one built property + price ≥ €10,000
 for 2021.
-
-## Scope definition — MEL perimeter
-
-The study area is the Métropole Européenne de Lille (95 communes, EPCI
-`200093201`). Rather than hardcoding 95 INSEE codes into every query, the
-list is pulled once from the official `geo.api.gouv.fr` endpoint and stored
-as a reference table:
-
-    CREATE OR REPLACE TABLE communes_mel AS
-    SELECT code AS code_insee, nom AS nom_commune
-    FROM read_json_auto(
-      'https://geo.api.gouv.fr/epcis/200093201/communes?fields=nom,code'
-    );
-
-Exported to `data/ref/communes_mel.csv` (versioned in the repo). Every
-downstream query filters by joining this table — the perimeter lives in the
-data, not in the code, and is reproducible from an authoritative source in
-one command.
-
-**Join key.** DVF stores `Code commune` unpadded (`9`, not `009`), so the
-INSEE code must be rebuilt as
-`"Code departement" || lpad("Code commune", 3, '0')`.
-Villeneuve-d'Ascq is `59009` — without the padding it becomes `599` and
-drops out of the join with no error raised.
-
-**Join validated on 2021:** all 95 MEL communes are present in the raw file,
-zero unmatched on either side.
-
-**Associated communes.** Lomme and Hellemmes-Lille hold their own INSEE codes
-but DVF reports them under Lille (`59350`) — a single row for the whole
-commune, 13,674 rows in 2021. No silent data loss, but Lille's median blends
-three distinct submarkets. Cannot be disaggregated from DVF alone; stated as
-a known limitation rather than worked around.
 
 ## Methodological check — do outbuildings inflate €/m²?
 
